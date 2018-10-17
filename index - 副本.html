@@ -1,0 +1,233 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>HTML5 Canvas粒子数字时钟动画DEMO演示</title>
+</head>
+
+<body style="padding:0px; margin:0px">
+	<p id="detail">detail</p>
+	<canvas id="canv" style="padding:0px; margin:0px"></canvas>
+	<script type="text/javascript">
+		var w = window.innerWidth - 10, h = window.innerHeight - 10;
+		var dt = document.getElementById("detail");
+		var can = document.getElementById("canv");
+		var ctx = can.getContext("2d");
+		var lastClock = Date.now();
+		var nowClock = Date.now();
+		var tit = document.getElementsByTagName("title")[0];
+		can.width = w;
+		can.height = h;
+		var opt = {
+			particleAmount: 3,
+			defaultSpeed: 10,
+			defaultRadius: 50,
+			MiniDistance: 20,
+			defaultDensity: 1,
+			G: 1,
+			mouseMess: 100
+		};
+		var mouseCoordinates = {
+			x: 0,
+			y: 0
+		};
+
+		function Particle() {
+			this.coordinate = {
+				x: Math.random() * w,
+				y: Math.random() * h
+			};
+
+			this.velocity = {
+				Vx: (opt.defaultSpeed * Math.random()) * Math.cos(Math.floor(Math.random() * 360)),
+				Vy: (opt.defaultSpeed * Math.random()) * Math.sin(Math.floor(Math.random() * 360))
+			};
+
+			this.acceleration = {
+				Ax: 0.0,
+				Ay: 0.0
+			};
+
+			this.force = {
+				Fx: 0,
+				Fy: 0
+			};
+
+			this.color = getRandomColor();
+			this.radius = opt.defaultRadius;
+			// * (Math.random() + 1)
+			this.mass = opt.defaultDensity * 4.0 / 3.0 * Math.PI * Math.pow(this.radius, 3);
+
+			//更新状态
+			this.update = function (delta) {
+				this.border();
+				this.coordinate.x += this.velocity.Vx * delta;
+				this.coordinate.y += this.velocity.Vy * delta;
+				this.velocity.Vx += this.acceleration.Ax * delta;
+				this.velocity.Vy += this.acceleration.Ay * delta;
+				this.acceleration.Ax = this.force.Fx / this.mass;
+				this.acceleration.Ay = this.force.Fy / this.mass;
+				//这里把力清空，为下一帧做准备
+				this.force = { Fx: 0, Fy: 0 };
+			};
+
+			//施加作用力
+			this.putForce = function (forx, fory) {
+				this.force.Fx += forx;
+				this.force.Fy += fory;
+			}
+
+			//边界碰撞检测
+			this.border = function () {
+				if ((this.coordinate.x + this.radius) >= w) {
+					this.velocity.Vx *= -0.9;
+					this.coordinate.x = w - this.radius - 1;
+				}
+				if ((this.coordinate.x - this.radius) <= 0) {
+					this.velocity.Vx *= -0.9;
+					this.coordinate.x = this.radius + 1;
+				}
+				if ((this.coordinate.y + this.radius) >= h) {
+					this.velocity.Vy *= -0.9;
+					this.coordinate.y = h - this.radius - 1;
+				}
+				if ((this.coordinate.y - this.radius) <= 0) {
+					this.velocity.Vy *= -0.9;
+					this.coordinate.y = this.radius + 1;
+				}
+			};
+
+			//绘制自身
+			this.drawSelf = function () {
+				ctx.beginPath();
+				ctx.arc(this.coordinate.x, this.coordinate.y, this.radius, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = this.color;
+				ctx.fill();
+			};
+
+			//绘制连线
+			this.drawline = function (aimX, aimY, dis) {
+				ctx.strokeStyle = "rgba(128,128,128," + (1 - (dis / opt.MiniDistance)) + ")";
+				ctx.beginPath();
+				ctx.moveTo(this.coordinate.x, this.coordinate.y);
+				ctx.lineTo(aimX, aimY);
+				ctx.closePath();
+				ctx.stroke();
+			};
+		};
+
+		var Particles = new Array();
+
+		function init() {
+			for (let index = 0; index < opt.particleAmount; index++) {
+				Particles.push(new Particle());
+			}
+			window.addEventListener('mousemove', getMouseCoordinate, true);
+			loop();
+		};
+
+		function loop() {
+
+			// 得到两帧之间时间差
+			lastClock = nowClock;
+			nowClock = Date.now();
+			var delta = (nowClock - lastClock) / 1000.0;
+
+			//清屏
+			ctx.clearRect(0, 0, w, h);
+
+			//遍历所有对象
+			for (let fir = 0; fir < Particles.length; fir++) {
+				Particles[fir].update(0.1);
+				for (let sec = fir + 1; sec < Particles.length; sec++) {
+					//水平差值
+					var dx = Particles[sec].coordinate.x - Particles[fir].coordinate.x;
+					//垂直差值
+					var dy = Particles[sec].coordinate.y - Particles[fir].coordinate.y;
+					//距离平方
+					var dis2 = Math.pow(dx, 2) + Math.pow(dy, 2);
+					//距离
+					var dis = Math.floor(Math.sqrt(dis2))+1;
+
+					if ((dis <= (Particles[sec].radius + Particles[fir].radius))) {
+
+						if (dis < (Particles[sec].radius + Particles[fir].radius)) {
+							Particles[sec].coordinate.x = Particles[fir].coordinate.x + dx;
+							Particles[sec].coordinate.y = Particles[fir].coordinate.y + dy;
+						}
+
+						//沿半径方向速度分量
+						var v1p = (Particles[fir].velocity.Vy * dy + Particles[fir].velocity.Vx * dx) / dis;
+						var v2p = (Particles[sec].velocity.Vy * dy + Particles[sec].velocity.Vx * dx) / dis;
+
+						//垂直半径方向速度分量
+						var v1c = (Particles[fir].velocity.Vy * dx + Particles[fir].velocity.Vx * dy) / dis;
+						var v2c = (Particles[sec].velocity.Vy * dx + Particles[sec].velocity.Vx * dy) / dis;
+
+						//碰撞后重新分配的沿半径方向速度分量
+						var _v1p = ((Particles[fir].mass - Particles[sec].mass) * v1p + 2 * Particles[sec].mass * v2p) / (Particles[fir].mass + Particles[sec].mass);
+						var _v2p = ((Particles[sec].mass - Particles[fir].mass) * v2p + 2 * Particles[fir].mass * v1p) / (Particles[fir].mass + Particles[sec].mass);
+
+						//重新合成的xy速度分量
+						Particles[fir].velocity.Vy = _v1p * dy / dis + v1c * dx / dis;
+						Particles[fir].velocity.Vx = _v1p * dx / dis + v1c * dy / dis;
+						Particles[sec].velocity.Vy = _v2p * dy / dis + v2c * dx / dis;
+						Particles[sec].velocity.Vx = _v2p * dx / dis + v2c * dy / dis;
+
+
+					}
+
+					// var f = opt.G * Particles[fir].mass * Particles[sec].mass / dis2;
+					// var fx = f * dx / dis;
+					// var fy = f * dy / dis;
+					// Particles[fir].putForce(fx, fy);
+					// Particles[sec].putForce(-fx, -fy);
+					if (dis <= opt.MiniDistance) {
+						Particles[fir].drawline(Particles[sec].coordinate.x, Particles[sec].coordinate.y, dis);
+					}
+				}
+
+				_dx = mouseCoordinates.x - Particles[fir].coordinate.x;
+				_dy = mouseCoordinates.y - Particles[fir].coordinate.y;
+				_dis2 = Math.pow(_dx, 2) + Math.pow(_dy, 2);
+				_dis = Math.sqrt(_dis2);
+				if (_dis <= opt.MiniDistance) {
+					// var f = opt.G * Particles[fir].mass * opt.mouseMess / Math.pow(dis, 2);
+					// var fx = f * dx / dis;
+					// var fy = f * dy / dis;
+					// Particles[fir].putForce(fx, fy);
+					Particles[fir].drawline(mouseCoordinates.x, mouseCoordinates.y, _dis);
+				}
+				Particles[fir].drawSelf();
+			}
+			window.requestAnimationFrame(loop);
+
+		};
+		init();
+
+
+		function getRandomColor() {
+			var color = "#";
+			for (var i = 0; i < 6; i++) {
+				color += (Math.random() * 16 | 0).toString(16);
+			}
+			return color;
+		}
+
+		function getMouseCoordinate() {
+			if (event.pageX || event.pageY) {
+				x = event.pageX;
+				y = event.pageY;
+			} else {
+				x = event.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
+				y = event.clientY + document.body.scrollTop + document.documentElement.scrollTop;
+			}
+			mouseCoordinates = { x: x, y: y };
+		}
+
+	</script>
+</body>
+
+</html>
